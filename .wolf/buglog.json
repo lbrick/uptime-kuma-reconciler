@@ -7,7 +7,7 @@
       "error_message": "SQLITE_CONSTRAINT: NOT NULL constraint failed: monitor.conditions",
       "file": "reconciler.py, charts/uptime-kuma-reconciler/files/reconciler.py",
       "root_cause": "Uptime Kuma >=1.23.x enforces NOT NULL on monitor.conditions but uptime-kuma-api library does not pass that field. The failure in ensure_group() propagated into the HTTPRoute CRD discovery except handler, mislogging it as 'HTTPRoute CRD not available' instead of the real cause.",
-      "fix": "Monkey-patched UptimeKumaApi._build_monitor_data at module load to inject conditions=[] into its returned dict. Wrapped ensure_group() calls in try/except so failures log with correct context. Also fixed Helm deployment.yaml to skip the ConfigMap /app mount when useCustomImage=true (otherwise the ConfigMap overwrites the fixed script in the image).",
+      "fix": "Monkey-patched UptimeKumaApi._build_monitor_data at module load to inject conditions=[] into its returned dict. Wrapped ensure_group() calls in try/except so failures log with correct context. Also fixed Helm deployment.yaml to skip the ConfigMap /app mount when useCustomImage=true.",
       "tags": ["sqlite", "uptime-kuma-api", "conditions", "not-null", "ensure_group", "exception-handling", "helm", "configmap"],
       "related_bugs": ["bug-002"],
       "occurrences": 2,
@@ -18,12 +18,36 @@
       "timestamp": "2026-04-07T08:10:12Z",
       "error_message": "UptimeKumaApi._build_monitor_data() got an unexpected keyword argument 'conditions'",
       "file": "reconciler.py",
-      "root_cause": "uptime-kuma-api._build_monitor_data() has a strict parameter signature with no **kwargs — it rejects unknown keyword arguments. Passing conditions=[] directly to add_monitor()/edit_monitor() triggers this error because the library doesn't know about 'conditions' yet.",
-      "fix": "Removed conditions=[] from all explicit add_monitor/edit_monitor kwargs. Instead, monkey-patched _build_monitor_data to pop 'conditions' from incoming kwargs (safe no-op if absent) then inject conditions=[] into the returned data dict before it is sent over the WebSocket.",
+      "root_cause": "uptime-kuma-api._build_monitor_data() has a strict parameter signature with no **kwargs — rejects unknown keyword arguments.",
+      "fix": "Removed conditions=[] from all explicit add_monitor/edit_monitor kwargs. Monkey-patched _build_monitor_data to pop 'conditions' from incoming kwargs then inject conditions=[] into the returned data dict.",
       "tags": ["uptime-kuma-api", "monkey-patch", "conditions", "_build_monitor_data"],
       "related_bugs": ["bug-001"],
       "occurrences": 1,
       "last_seen": "2026-04-07T08:10:12Z"
+    },
+    {
+      "id": "bug-003",
+      "timestamp": "2026-04-07T08:29:27Z",
+      "error_message": "Monitor group recreated on every reconcile; sonarr monitor not updated on second reconcile",
+      "file": "reconciler.py",
+      "root_cause": "MonitorType enum values do not compare equal to the plain strings returned by api.get_monitors(). ensure_group() used `m.get('type') == MonitorType.GROUP` — always False when type is the string 'group'. Same issue in needs_update type checks in reconcile_resource() and reconcile_static_monitors().",
+      "fix": "Added _type_str() helper (returns t.value if enum, else t as-is). Applied to both sides of every type comparison: ensure_group() group detection and all needs_update type checks.",
+      "tags": ["enum", "type-comparison", "ensure_group", "needs_update", "MonitorType"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-07T08:29:27Z"
+    },
+    {
+      "id": "bug-004",
+      "timestamp": "2026-04-07T08:24:26Z",
+      "error_message": "HTTPRoute monitors created with https:// instead of http://",
+      "file": "reconciler.py",
+      "root_cause": "extract_url_from_resource() for HTTPRoute kind always hardcoded 'https'. HTTPRoute itself has no scheme — it is determined by the Gateway listener section.",
+      "fix": "Inspect spec.parentRefs[].sectionName: if any contains 'https' use https://, otherwise http://.",
+      "tags": ["httproute", "scheme", "url", "extract_url_from_resource"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-07T08:24:26Z"
     }
   ]
 }

@@ -13,18 +13,24 @@
 ## Key Learnings
 
 - **Project:** uptime-kuma-reconciler — a Kubernetes reconciler (single Python file) that auto-discovers `Ingress`, `IngressRoute` (Traefik), and `HTTPRoute` (Gateway API) resources and manages Uptime Kuma monitors via the `uptime-kuma-api` WebSocket client library.
-- **Helm chart mirrors reconciler.py**: `charts/uptime-kuma-reconciler/files/reconciler.py` is a copy of the root `reconciler.py` mounted via ConfigMap. Both must be kept in sync whenever the script is changed.
-- **Uptime Kuma ≥ 1.23.x enforces `conditions NOT NULL`**: All `api.add_monitor()` and `api.edit_monitor()` calls must include `conditions=[]` or Uptime Kuma's SQLite layer will reject the INSERT/UPDATE.
-- **`ensure_group()` must be wrapped in try/except at call sites**: It is called unguarded inside `reconcile_resource()` and `reconcile_static_monitors()`. If it raises (e.g., the conditions constraint above), the exception propagates into the broad CRD-discovery `except` handlers in `full_reconcile()`, causing it to be mislogged as "IngressRoute/HTTPRoute CRD not available" with the SQL error as the message — masking the real failure.
+- **Helm chart mirrors reconciler.py**: `charts/uptime-kuma-reconciler/files/reconciler.py` is a copy of the root `reconciler.py` mounted via ConfigMap. Both must be kept in sync whenever the script is changed. Use `cp reconciler.py charts/uptime-kuma-reconciler/files/reconciler.py` after every edit.
+- **Uptime Kuma ≥ 1.23.x enforces `conditions NOT NULL`**: Fixed via monkey-patch of `UptimeKumaApi._build_monitor_data` at module load — pops `conditions` from kwargs (library rejects it as unknown), injects `conditions: []` into the returned dict instead.
+- **`ensure_group()` must be wrapped in try/except at call sites**: Exceptions from it propagate into the CRD-discovery `except` handlers in `full_reconcile()` and get mislogged as "IngressRoute/HTTPRoute CRD not available". Both call sites in `reconcile_resource()` and `reconcile_static_monitors()` now catch and log correctly.
+- **MonitorType enum vs API string mismatch**: `api.get_monitors()` returns `type` as a plain string (e.g. `"group"`, `"http"`). Comparing directly against `MonitorType.GROUP` (enum) fails silently in Python unless the enum inherits from `str`. Fixed with `_type_str()` helper (`t.value if hasattr(t, "value") else t`) applied to both sides of every type comparison. This affected: `ensure_group()` group detection (caused group recreation every reconcile) and `needs_update` type checks.
+- **Group monitors are NOT tagged**: `ensure_group()` creates groups without `managed-by-reconciler` tag. Groups are found by scanning ALL monitors (`api.get_monitors()`), not just managed ones. Do not expect groups to appear in `get_managed_monitors()`.
+- **HTTPRoute scheme detection**: HTTPRoute has no native HTTP/HTTPS distinction — it's determined by the Gateway listener. Heuristic: check `spec.parentRefs[].sectionName`; if any contains `"https"` → use `https://`, else `http://`.
+- **Monitor name = Kubernetes resource name only**: `build_monitor_key()` now returns just `metadata.name` (e.g. `sonarr`), not the full `namespace/Kind/name` path. Changing this causes existing monitors with old-style names to be orphaned and recreated.
+- **useCustomImage=true + ConfigMap mount conflict**: When `useCustomImage: true`, the Helm deployment was still mounting the ConfigMap at `/app`, overwriting the image's script. Fixed in `deployment.yaml` — both the volumeMount and the volume are now conditional on `not .Values.image.useCustomImage`.
 - **MANAGED_TAG sentinel**: The reconciler only touches monitors tagged `managed-by-reconciler` (blue, `#2563eb`). Manually-created monitors are never modified.
-- **No existing CI/CD before this session** — no `.github/workflows/` existed; added `docker-publish.yaml` this session.
-- **GitHub actor**: `lbrick` (GitHub username for the fork owner).
+- **GitHub CI**: `.github/workflows/docker-publish.yaml` builds and pushes to `ghcr.io/lbrick/uptime-kuma-reconciler` on all branch pushes. Tags: short SHA always, `:latest` on `main` only.
 
 ## Do-Not-Repeat
 
-- **[2026-04-07]** Do NOT pass `conditions=[]` as a kwarg to `api.add_monitor()` or `api.edit_monitor()`. The installed `uptime-kuma-api` library has a strict `_build_monitor_data()` signature with no `**kwargs`, so it raises "unexpected keyword argument 'conditions'". Instead, monkey-patch `_build_monitor_data` at module load to pop `conditions` from kwargs then inject `conditions: []` into the returned dict. The patch is at the top of `reconciler.py` right after the import.
-- **[2026-04-07]** Do not leave `ensure_group()` calls unguarded. Wrap them in try/except at the call site so failures log with the correct context and don't silently abort an entire CRD resource list.
-- **[2026-04-07]** After editing `reconciler.py`, always sync the change to `charts/uptime-kuma-reconciler/files/reconciler.py`.
+- **[2026-04-07]** Do NOT pass `conditions=[]` as a kwarg to `api.add_monitor()` or `api.edit_monitor()`. The installed `uptime-kuma-api` library rejects it. Use the monkey-patch at module load instead.
+- **[2026-04-07]** Do not compare `m.get("type")` directly against `MonitorType.*` — the API returns plain strings, enums don't compare equal to strings by default. Always use `_type_str()` on both sides.
+- **[2026-04-07]** Do not leave `ensure_group()` calls unguarded. Wrap in try/except at call sites.
+- **[2026-04-07]** After editing `reconciler.py`, always sync to `charts/uptime-kuma-reconciler/files/reconciler.py`.
+- **[2026-04-07]** Do not assume the Helm chart's ConfigMap won't interfere with a custom image — the `/app` mount must be gated on `not .Values.image.useCustomImage` in both volumeMounts and volumes.
 
 ## Decision Log
 
