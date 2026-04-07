@@ -30,8 +30,8 @@
       "timestamp": "2026-04-07T08:29:27Z",
       "error_message": "Monitor group recreated on every reconcile; sonarr monitor not updated on second reconcile",
       "file": "reconciler.py",
-      "root_cause": "MonitorType enum values do not compare equal to the plain strings returned by api.get_monitors(). ensure_group() used `m.get('type') == MonitorType.GROUP` — always False when type is the string 'group'. Same issue in needs_update type checks in reconcile_resource() and reconcile_static_monitors().",
-      "fix": "Added _type_str() helper (returns t.value if enum, else t as-is). Applied to both sides of every type comparison: ensure_group() group detection and all needs_update type checks.",
+      "root_cause": "MonitorType enum values do not compare equal to the plain strings returned by api.get_monitors(). ensure_group() used m.get('type') == MonitorType.GROUP — always False when type is the string 'group'. Same issue in needs_update type checks.",
+      "fix": "Added _type_str() helper (returns t.value if enum, else t as-is). Applied to both sides of every type comparison.",
       "tags": ["enum", "type-comparison", "ensure_group", "needs_update", "MonitorType"],
       "related_bugs": [],
       "occurrences": 1,
@@ -42,12 +42,24 @@
       "timestamp": "2026-04-07T08:24:26Z",
       "error_message": "HTTPRoute monitors created with https:// instead of http://",
       "file": "reconciler.py",
-      "root_cause": "extract_url_from_resource() for HTTPRoute kind always hardcoded 'https'. HTTPRoute itself has no scheme — it is determined by the Gateway listener section.",
+      "root_cause": "extract_url_from_resource() for HTTPRoute kind always hardcoded 'https'. HTTPRoute itself has no scheme — determined by the Gateway listener section.",
       "fix": "Inspect spec.parentRefs[].sectionName: if any contains 'https' use https://, otherwise http://.",
       "tags": ["httproute", "scheme", "url", "extract_url_from_resource"],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-04-07T08:24:26Z"
+    },
+    {
+      "id": "bug-005",
+      "timestamp": "2026-04-07T08:43:36Z",
+      "error_message": "Monitor group created twice when two static monitors share the same group",
+      "file": "reconciler.py",
+      "root_cause": "ensure_group() called api.get_monitors() fresh on every invocation. The WebSocket API does not reflect a newly created group monitor immediately within the same reconcile cycle, so the second call never found the just-created group and created a duplicate.",
+      "fix": "Added group_cache dict (created once per reconcile in full_reconcile(), passed through to reconcile_static_monitors() and reconcile_resource()). ensure_group() now checks/writes the cache before hitting the API. Duplicate API calls for the same group name are eliminated entirely.",
+      "tags": ["ensure_group", "group_cache", "static-monitors", "duplicate", "websocket"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-07T08:43:36Z"
     }
   ]
 }

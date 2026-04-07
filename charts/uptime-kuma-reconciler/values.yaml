@@ -4,6 +4,7 @@ kumaUrl: "http://uptime-kuma.default.svc.cluster.local:3001"
 # Reconciler settings
 resyncInterval: "300"    # Seconds between full reconciliation cycles
 logLevel: "INFO"         # DEBUG, INFO, WARNING, ERROR
+monitorNameIncludeNamespace: false  # When true, monitor names are prefixed with the namespace (e.g. "entertainment/sonarr")
 
 # Credentials - provide via existingSecret or inline (not recommended)
 credentials:

@@ -9,6 +9,7 @@ data:
   KUMA_URL: {{ .Values.kumaUrl | quote }}
   RESYNC_INTERVAL: {{ .Values.resyncInterval | quote }}
   LOG_LEVEL: {{ .Values.logLevel | quote }}
+  MONITOR_NAME_INCLUDE_NAMESPACE: {{ .Values.monitorNameIncludeNamespace | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap

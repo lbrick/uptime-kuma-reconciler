@@ -17,3 +17,7 @@
 | 08:24 | Simplified monitor name — build_monitor_key() now returns just metadata.name (e.g. 'sonarr') not full namespace/Kind/name | reconciler.py, charts/.../files/reconciler.py | Fixed | ~50 |
 | 08:29 | Fixed MonitorType enum vs string comparison — added _type_str() helper; fixed ensure_group() group detection and all needs_update type checks | reconciler.py, charts/.../files/reconciler.py | Fixed | ~200 |
 | 08:35 | Updated OpenWolf with all session learnings | .wolf/cerebrum.md, .wolf/buglog.json, .wolf/memory.md | Done | ~400 |
+| 08:40 | Added monitorNameIncludeNamespace feature — Helm value + env var + build_monitor_key() logic | values.yaml, configmap.yaml, reconciler.py (both copies) | Done | ~150 |
+| 08:43 | Fixed duplicate group creation — added group_cache dict passed through full_reconcile to all ensure_group call sites | reconciler.py (both copies) | Fixed | ~200 |
+| 08:43 | Removed static/ prefix from static monitor names — key = name directly | reconciler.py (both copies) | Fixed | ~50 |
+| 08:50 | Updated OpenWolf with bug-005 and new cerebrum entries | .wolf/ | Done | ~200 |

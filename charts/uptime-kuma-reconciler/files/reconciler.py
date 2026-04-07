@@ -92,15 +92,19 @@ def ensure_tag(api):
     return result["id"]
 
 
-def ensure_group(api, group_name):
+def ensure_group(api, group_name, group_cache):
     if not group_name:
         return None
+    if group_name in group_cache:
+        return group_cache[group_name]
     monitors = api.get_monitors()
     for m in monitors:
         if _type_str(m.get("type")) == _type_str(MonitorType.GROUP) and m.get("name") == group_name:
+            group_cache[group_name] = m["id"]
             return m["id"]
     result = api.add_monitor(type=MonitorType.GROUP, name=group_name)
     log.info("Created monitor group: %s", group_name)
+    group_cache[group_name] = result["monitorID"]
     return result["monitorID"]
 
 
@@ -141,11 +145,19 @@ def extract_url_from_resource(resource):
     return None
 
 
+MONITOR_NAME_INCLUDE_NAMESPACE = os.environ.get("MONITOR_NAME_INCLUDE_NAMESPACE", "false").lower() == "true"
+
+
 def build_monitor_key(resource):
-    return resource.get("metadata", {}).get("name", "unknown")
+    meta = resource.get("metadata", {})
+    name = meta.get("name", "unknown")
+    if MONITOR_NAME_INCLUDE_NAMESPACE:
+        ns = meta.get("namespace", "")
+        return f"{ns}/{name}" if ns else name
+    return name
 
 
-def reconcile_resource(api, resource, managed, tag_id):
+def reconcile_resource(api, resource, managed, tag_id, group_cache):
     annotations = resource.get("metadata", {}).get("annotations") or {}
     enabled = annotations.get(ANNOTATION_ENABLED, "").lower() == "true"
     key = build_monitor_key(resource)
@@ -171,7 +183,7 @@ def reconcile_resource(api, resource, managed, tag_id):
     parent_id = None
     if group_name:
         try:
-            parent_id = ensure_group(api, group_name)
+            parent_id = ensure_group(api, group_name, group_cache)
         except Exception as e:
             log.error("Failed to ensure group %s for %s: %s", group_name, key, e)
             return
@@ -228,7 +240,7 @@ def load_static_monitors():
         return []
 
 
-def reconcile_static_monitors(api, managed, tag_id):
+def reconcile_static_monitors(api, managed, tag_id, group_cache):
     """Create/update monitors from static definitions."""
     static_defs = load_static_monitors()
     seen_keys = set()
@@ -238,7 +250,7 @@ def reconcile_static_monitors(api, managed, tag_id):
         if not name:
             continue
 
-        key = f"static/{name}"
+        key = name
         seen_keys.add(key)
 
         monitor_type_str = entry.get("type", "http").lower()
@@ -248,7 +260,7 @@ def reconcile_static_monitors(api, managed, tag_id):
         parent_id = None
         if group_name:
             try:
-                parent_id = ensure_group(api, group_name)
+                parent_id = ensure_group(api, group_name, group_cache)
             except Exception as e:
                 log.error("Failed to ensure group %s for %s: %s", group_name, key, e)
                 continue
@@ -340,9 +352,10 @@ def full_reconcile(api, tag_id):
 
     managed = get_managed_monitors(api)
     seen_keys = set()
+    group_cache = {}
 
     # --- Static monitors from ConfigMap ---
-    static_keys = reconcile_static_monitors(api, managed, tag_id)
+    static_keys = reconcile_static_monitors(api, managed, tag_id, group_cache)
     seen_keys.update(static_keys)
 
     # --- Auto-discovered Kubernetes resources ---
@@ -362,7 +375,7 @@ def full_reconcile(api, tag_id):
             }
             key = build_monitor_key(resource)
             seen_keys.add(key)
-            reconcile_resource(api, resource, managed, tag_id)
+            reconcile_resource(api, resource, managed, tag_id, group_cache)
     except Exception as e:
         log.error("Error listing Ingresses: %s", e)
 
@@ -375,7 +388,7 @@ def full_reconcile(api, tag_id):
             ir["kind"] = "IngressRoute"
             key = build_monitor_key(ir)
             seen_keys.add(key)
-            reconcile_resource(api, ir, managed, tag_id)
+            reconcile_resource(api, ir, managed, tag_id, group_cache)
     except Exception as e:
         log.debug("IngressRoute CRD not available: %s", e)
 
@@ -388,7 +401,7 @@ def full_reconcile(api, tag_id):
             hr["kind"] = "HTTPRoute"
             key = build_monitor_key(hr)
             seen_keys.add(key)
-            reconcile_resource(api, hr, managed, tag_id)
+            reconcile_resource(api, hr, managed, tag_id, group_cache)
     except Exception as e:
         log.debug("HTTPRoute CRD not available: %s", e)
 
