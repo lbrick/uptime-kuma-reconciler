@@ -80,7 +80,7 @@ def ensure_group(api, group_name):
     for m in monitors:
         if m.get("type") == MonitorType.GROUP and m.get("name") == group_name:
             return m["id"]
-    result = api.add_monitor(type=MonitorType.GROUP, name=group_name)
+    result = api.add_monitor(type=MonitorType.GROUP, name=group_name, conditions=[])
     log.info("Created monitor group: %s", group_name)
     return result["monitorID"]
 
@@ -148,7 +148,13 @@ def reconcile_resource(api, resource, managed, tag_id):
     monitor_type = MONITOR_TYPES.get(monitor_type_str, MonitorType.HTTP)
     interval = int(annotations.get(ANNOTATION_INTERVAL, "60"))
     group_name = annotations.get(ANNOTATION_GROUP, "")
-    parent_id = ensure_group(api, group_name) if group_name else None
+    parent_id = None
+    if group_name:
+        try:
+            parent_id = ensure_group(api, group_name)
+        except Exception as e:
+            log.error("Failed to ensure group %s for %s: %s", group_name, key, e)
+            return
 
     if key in managed:
         existing = managed[key]
@@ -163,6 +169,7 @@ def reconcile_resource(api, resource, managed, tag_id):
                 kwargs = dict(
                     type=monitor_type, name=key, url=url,
                     interval=interval, retryInterval=60, maxretries=3,
+                    conditions=[],
                 )
                 if parent_id is not None:
                     kwargs["parent"] = parent_id
@@ -175,6 +182,7 @@ def reconcile_resource(api, resource, managed, tag_id):
             kwargs = dict(
                 type=monitor_type, name=key, url=url,
                 interval=interval, retryInterval=60, maxretries=3,
+                conditions=[],
             )
             if parent_id is not None:
                 kwargs["parent"] = parent_id
@@ -219,7 +227,13 @@ def reconcile_static_monitors(api, managed, tag_id):
         monitor_type = MONITOR_TYPES.get(monitor_type_str, MonitorType.HTTP)
         interval = int(entry.get("interval", 60))
         group_name = entry.get("group", "")
-        parent_id = ensure_group(api, group_name) if group_name else None
+        parent_id = None
+        if group_name:
+            try:
+                parent_id = ensure_group(api, group_name)
+            except Exception as e:
+                log.error("Failed to ensure group %s for %s: %s", group_name, key, e)
+                continue
 
         kwargs = dict(
             type=monitor_type,
@@ -227,6 +241,7 @@ def reconcile_static_monitors(api, managed, tag_id):
             interval=interval,
             retryInterval=60,
             maxretries=3,
+            conditions=[],
         )
 
         if monitor_type == MonitorType.HTTP:

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-04-07T07:15:36Z",
+      "error_message": "SQLITE_CONSTRAINT: NOT NULL constraint failed: monitor.conditions",
+      "file": "reconciler.py, charts/uptime-kuma-reconciler/files/reconciler.py",
+      "root_cause": "api.add_monitor() calls did not pass `conditions` parameter. Uptime Kuma >=1.23.x enforces NOT NULL on monitor.conditions. The failure in ensure_group() propagated into the HTTPRoute CRD discovery except handler, so it was mislogged as 'HTTPRoute CRD not available: <sql error>' instead of the real cause.",
+      "fix": "Added `conditions=[]` to all api.add_monitor() and api.edit_monitor() kwargs in ensure_group(), reconcile_resource(), and reconcile_static_monitors(). Wrapped ensure_group() calls in try/except at call sites so failures log correctly and skip only the affected resource rather than aborting the whole CRD list.",
+      "tags": ["sqlite", "uptime-kuma-api", "conditions", "not-null", "ensure_group", "exception-handling"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-07T07:15:36Z"
+    }
+  ]
+}
