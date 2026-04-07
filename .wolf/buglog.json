@@ -60,6 +60,18 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-04-07T08:43:36Z"
+    },
+    {
+      "id": "bug-006",
+      "timestamp": "2026-04-07T08:55:44Z",
+      "error_message": "Monitor group 'Infra Services' created again on second reconcile",
+      "file": "reconciler.py",
+      "root_cause": "group_cache was initialised as an empty dict at the start of full_reconcile() every cycle. The cache only prevented duplicate creation within a single reconcile. On the next cycle, the cache was empty and ensure_group() called api.get_monitors() but apparently did not find the existing group (possibly a WebSocket state issue or timing). A new group was created.",
+      "fix": "Pre-populate group_cache at the start of full_reconcile() by scanning api.get_monitors() for all existing GROUP-type monitors. The cache is now warm at reconcile start, so ensure_group() finds pre-existing groups immediately without re-creating them.",
+      "tags": ["ensure_group", "group_cache", "duplicate-group", "full_reconcile", "cross-cycle"],
+      "related_bugs": ["bug-005"],
+      "occurrences": 1,
+      "last_seen": "2026-04-07T08:55:44Z"
     }
   ]
 }

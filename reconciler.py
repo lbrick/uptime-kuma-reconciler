@@ -352,7 +352,15 @@ def full_reconcile(api, tag_id):
 
     managed = get_managed_monitors(api)
     seen_keys = set()
-    group_cache = {}
+
+    # Pre-populate group cache from all existing monitors so groups created in
+    # previous reconcile cycles are found without re-querying or re-creating.
+    all_monitors = api.get_monitors()
+    group_cache = {
+        m["name"]: m["id"]
+        for m in all_monitors
+        if _type_str(m.get("type")) == _type_str(MonitorType.GROUP)
+    }
 
     # --- Static monitors from ConfigMap ---
     static_keys = reconcile_static_monitors(api, managed, tag_id, group_cache)

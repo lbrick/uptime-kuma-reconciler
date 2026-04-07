@@ -21,3 +21,4 @@
 | 08:43 | Fixed duplicate group creation — added group_cache dict passed through full_reconcile to all ensure_group call sites | reconciler.py (both copies) | Fixed | ~200 |
 | 08:43 | Removed static/ prefix from static monitor names — key = name directly | reconciler.py (both copies) | Fixed | ~50 |
 | 08:50 | Updated OpenWolf with bug-005 and new cerebrum entries | .wolf/ | Done | ~200 |
+| 09:00 | Fixed cross-cycle duplicate group creation — pre-populate group_cache from api.get_monitors() at start of full_reconcile() | reconciler.py, charts/.../files/reconciler.py | Fixed (bug-006) | ~100 |
