@@ -48,8 +48,10 @@ spec:
                   name: {{ include "uptime-kuma-reconciler.secretName" . }}
                   key: password
           volumeMounts:
+            {{- if not .Values.image.useCustomImage }}
             - name: reconciler-script
               mountPath: /app
+            {{- end }}
             {{- if .Values.staticMonitors.enabled }}
             - name: static-monitors
               mountPath: /config
@@ -59,9 +61,11 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
       volumes:
+        {{- if not .Values.image.useCustomImage }}
         - name: reconciler-script
           configMap:
             name: {{ include "uptime-kuma-reconciler.fullname" . }}-script
+        {{- end }}
         {{- if .Values.staticMonitors.enabled }}
         - name: static-monitors
           configMap:
