@@ -57,6 +57,11 @@ MONITOR_TYPES = {
 shutdown_event = Event()
 
 
+def _type_str(t):
+    """Normalise a MonitorType enum or raw API string to a plain string."""
+    return t.value if hasattr(t, "value") else t
+
+
 def signal_handler(signum, frame):
     log.info("Received signal %s, shutting down...", signum)
     shutdown_event.set()
@@ -92,7 +97,7 @@ def ensure_group(api, group_name):
         return None
     monitors = api.get_monitors()
     for m in monitors:
-        if m.get("type") == MonitorType.GROUP and m.get("name") == group_name:
+        if _type_str(m.get("type")) == _type_str(MonitorType.GROUP) and m.get("name") == group_name:
             return m["id"]
     result = api.add_monitor(type=MonitorType.GROUP, name=group_name)
     log.info("Created monitor group: %s", group_name)
@@ -126,17 +131,18 @@ def extract_url_from_resource(resource):
 
     elif kind == "HTTPRoute":
         for hostname in spec.get("hostnames") or []:
-            return f"https://{hostname}"
+            parent_refs = spec.get("parentRefs") or []
+            scheme = "https" if any(
+                "https" in (ref.get("sectionName") or "").lower()
+                for ref in parent_refs
+            ) else "http"
+            return f"{scheme}://{hostname}"
 
     return None
 
 
 def build_monitor_key(resource):
-    meta = resource.get("metadata", {})
-    kind = resource.get("kind", "")
-    ns = meta.get("namespace", "default")
-    name = meta.get("name", "unknown")
-    return f"{ns}/{kind}/{name}"
+    return resource.get("metadata", {}).get("name", "unknown")
 
 
 def reconcile_resource(api, resource, managed, tag_id):
@@ -175,7 +181,7 @@ def reconcile_resource(api, resource, managed, tag_id):
         needs_update = (
             existing.get("url") != url
             or existing.get("interval") != interval
-            or existing.get("type") != monitor_type
+            or _type_str(existing.get("type")) != _type_str(monitor_type)
         )
         if needs_update:
             log.info("Updating monitor %s -> %s", key, url)
@@ -289,7 +295,7 @@ def reconcile_static_monitors(api, managed, tag_id):
                 needs_update = (
                     existing.get("url") != kwargs.get("url")
                     or existing.get("interval") != interval
-                    or existing.get("type") != monitor_type
+                    or _type_str(existing.get("type")) != _type_str(monitor_type)
                 )
             elif monitor_type == MonitorType.PING:
                 needs_update = (
