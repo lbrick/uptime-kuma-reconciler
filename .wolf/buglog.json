@@ -6,12 +6,24 @@
       "timestamp": "2026-04-07T07:15:36Z",
       "error_message": "SQLITE_CONSTRAINT: NOT NULL constraint failed: monitor.conditions",
       "file": "reconciler.py, charts/uptime-kuma-reconciler/files/reconciler.py",
-      "root_cause": "api.add_monitor() calls did not pass `conditions` parameter. Uptime Kuma >=1.23.x enforces NOT NULL on monitor.conditions. The failure in ensure_group() propagated into the HTTPRoute CRD discovery except handler, so it was mislogged as 'HTTPRoute CRD not available: <sql error>' instead of the real cause.",
-      "fix": "Added `conditions=[]` to all api.add_monitor() and api.edit_monitor() kwargs in ensure_group(), reconcile_resource(), and reconcile_static_monitors(). Wrapped ensure_group() calls in try/except at call sites so failures log correctly and skip only the affected resource rather than aborting the whole CRD list.",
-      "tags": ["sqlite", "uptime-kuma-api", "conditions", "not-null", "ensure_group", "exception-handling"],
-      "related_bugs": [],
+      "root_cause": "Uptime Kuma >=1.23.x enforces NOT NULL on monitor.conditions but uptime-kuma-api library does not pass that field. The failure in ensure_group() propagated into the HTTPRoute CRD discovery except handler, mislogging it as 'HTTPRoute CRD not available' instead of the real cause.",
+      "fix": "Monkey-patched UptimeKumaApi._build_monitor_data at module load to inject conditions=[] into its returned dict. Wrapped ensure_group() calls in try/except so failures log with correct context. Also fixed Helm deployment.yaml to skip the ConfigMap /app mount when useCustomImage=true (otherwise the ConfigMap overwrites the fixed script in the image).",
+      "tags": ["sqlite", "uptime-kuma-api", "conditions", "not-null", "ensure_group", "exception-handling", "helm", "configmap"],
+      "related_bugs": ["bug-002"],
+      "occurrences": 2,
+      "last_seen": "2026-04-07T08:10:12Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-04-07T08:10:12Z",
+      "error_message": "UptimeKumaApi._build_monitor_data() got an unexpected keyword argument 'conditions'",
+      "file": "reconciler.py",
+      "root_cause": "uptime-kuma-api._build_monitor_data() has a strict parameter signature with no **kwargs — it rejects unknown keyword arguments. Passing conditions=[] directly to add_monitor()/edit_monitor() triggers this error because the library doesn't know about 'conditions' yet.",
+      "fix": "Removed conditions=[] from all explicit add_monitor/edit_monitor kwargs. Instead, monkey-patched _build_monitor_data to pop 'conditions' from incoming kwargs (safe no-op if absent) then inject conditions=[] into the returned data dict before it is sent over the WebSocket.",
+      "tags": ["uptime-kuma-api", "monkey-patch", "conditions", "_build_monitor_data"],
+      "related_bugs": ["bug-001"],
       "occurrences": 1,
-      "last_seen": "2026-04-07T07:15:36Z"
+      "last_seen": "2026-04-07T08:10:12Z"
     }
   ]
 }

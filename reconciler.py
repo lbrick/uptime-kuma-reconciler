@@ -20,6 +20,20 @@ import yaml
 from kubernetes import client, config, watch
 from uptime_kuma_api import UptimeKumaApi, MonitorType
 
+# Uptime Kuma >= 1.23 added a NOT NULL constraint on monitor.conditions but the
+# uptime-kuma-api library doesn't yet pass that field. Patch _build_monitor_data
+# to always inject conditions=[] into the data dict it returns.
+_orig_build_monitor_data = UptimeKumaApi._build_monitor_data
+
+def _patched_build_monitor_data(*args, **kwargs):
+    kwargs.pop("conditions", None)
+    data = _orig_build_monitor_data(*args, **kwargs)
+    if isinstance(data, dict):
+        data.setdefault("conditions", [])
+    return data
+
+UptimeKumaApi._build_monitor_data = _patched_build_monitor_data
+
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(message)s",
@@ -80,7 +94,7 @@ def ensure_group(api, group_name):
     for m in monitors:
         if m.get("type") == MonitorType.GROUP and m.get("name") == group_name:
             return m["id"]
-    result = api.add_monitor(type=MonitorType.GROUP, name=group_name, conditions=[])
+    result = api.add_monitor(type=MonitorType.GROUP, name=group_name)
     log.info("Created monitor group: %s", group_name)
     return result["monitorID"]
 
@@ -169,7 +183,6 @@ def reconcile_resource(api, resource, managed, tag_id):
                 kwargs = dict(
                     type=monitor_type, name=key, url=url,
                     interval=interval, retryInterval=60, maxretries=3,
-                    conditions=[],
                 )
                 if parent_id is not None:
                     kwargs["parent"] = parent_id
@@ -182,7 +195,6 @@ def reconcile_resource(api, resource, managed, tag_id):
             kwargs = dict(
                 type=monitor_type, name=key, url=url,
                 interval=interval, retryInterval=60, maxretries=3,
-                conditions=[],
             )
             if parent_id is not None:
                 kwargs["parent"] = parent_id
@@ -241,7 +253,6 @@ def reconcile_static_monitors(api, managed, tag_id):
             interval=interval,
             retryInterval=60,
             maxretries=3,
-            conditions=[],
         )
 
         if monitor_type == MonitorType.HTTP:

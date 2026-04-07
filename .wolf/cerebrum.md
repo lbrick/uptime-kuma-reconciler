@@ -22,7 +22,7 @@
 
 ## Do-Not-Repeat
 
-- **[2026-04-07]** Do not call `api.add_monitor()` or `api.edit_monitor()` without `conditions=[]`. Uptime Kuma will reject it with `SQLITE_CONSTRAINT: NOT NULL constraint failed: monitor.conditions`. This affects group creation in `ensure_group()` too.
+- **[2026-04-07]** Do NOT pass `conditions=[]` as a kwarg to `api.add_monitor()` or `api.edit_monitor()`. The installed `uptime-kuma-api` library has a strict `_build_monitor_data()` signature with no `**kwargs`, so it raises "unexpected keyword argument 'conditions'". Instead, monkey-patch `_build_monitor_data` at module load to pop `conditions` from kwargs then inject `conditions: []` into the returned dict. The patch is at the top of `reconciler.py` right after the import.
 - **[2026-04-07]** Do not leave `ensure_group()` calls unguarded. Wrap them in try/except at the call site so failures log with the correct context and don't silently abort an entire CRD resource list.
 - **[2026-04-07]** After editing `reconciler.py`, always sync the change to `charts/uptime-kuma-reconciler/files/reconciler.py`.
 
